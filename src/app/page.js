@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import FileList from "./components/FileList";
 
 export default function Home() {
   const [file, setFile] = useState(null);
@@ -67,6 +68,8 @@ export default function Home() {
           Stored as key: <code>{uploadedKey}</code>
         </p>
       )}
+      
+      <FileList />
     </div>
   );
 }
