@@ -1,0 +1,13 @@
+{
+  "name": "s3-watermark-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function to watermark images from S3 uploads",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "jimp": "^0.22.10"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
