@@ -14,14 +14,15 @@ export default function FileList() {
       const response = await fetch("/api/list-files");
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to fetch files");
+        console.error("API Error:", errorData);
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch files`);
       }
       const data = await response.json();
       console.log("Fetched files:", data);
       setFiles(data.files || []);
     } catch (err) {
       console.error("Error fetching files:", err);
-      setError(err.message);
+      setError(`Error: ${err.message}. Check server logs for details.`);
     } finally {
       setLoading(false);
     }

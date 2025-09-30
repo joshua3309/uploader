@@ -28,7 +28,8 @@ export default function Home() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to get pre-signed URL");
+        console.error("Upload API Error:", data);
+        throw new Error(data.error || `HTTP ${res.status}: Failed to get pre-signed URL`);
       }
 
       const { url, key } = await res.json();
