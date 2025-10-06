@@ -1,0 +1,49 @@
+name: ci pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: setup-node js
+        uses: actions/setup-node@v4
+        with:
+          node-version "20"
+          cache "npm"
+
+      - name: install dependencies
+        run: npm ci 
+
+      - name: run lint
+        run: npm run lint
+
+      - name: run test
+        run: npm run test
+
+      - name: build app
+        run: npm run build
+
+      - name: build artifact
+        uses: actions/upload-artifact@v4
+        with: 
+          name: nextjs-build
+          path: |
+            .next/
+            package.json
+            package-lock.json
+            public/
+            next.config.js
+          retention-days: 1
+       
+
