@@ -6,10 +6,6 @@ on:
     types:
       - completed
 
-permissions:
-  actions: read  # Required for artifact download
-  contents: read # Required for downloading artifacts
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -18,60 +14,6 @@ jobs:
     steps:
       - name: checkout code
         uses: actions/checkout@v4
-        # Note: Keeping for future AWS CLI operations
-      - name: Debug workflow run info
-        run: |
-          echo "Workflow run ID: ${{ github.event.workflow_run.id }}"
-          echo "Repository: ${{ github.event.workflow_run.repository.full_name }}"
-          echo "Workflow name: ${{ github.event.workflow_run.name }}"
-          echo "Conclusion: ${{ github.event.workflow_run.conclusion }}"
-          echo "Head SHA: ${{ github.event.workflow_run.head_sha }}"
-          
-      - name: List available artifacts
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: '${{ github.event.workflow_run.id }}'
-            });
-            console.log('Available artifacts:', artifacts.data.artifacts);
-            if (artifacts.data.artifacts.length === 0) {
-              console.log('No artifacts found in this workflow run');
-            }
-          
-      - name: Get latest successful workflow run
-        uses: actions/github-script@v6
-        id: get-workflow-run
-        with:
-          script: |
-            const workflowRuns = await github.rest.actions.listWorkflowRuns({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'main.yml',
-              status: 'completed',
-              conclusion: 'success',
-              per_page: 1
-            });
-            
-            if (workflowRuns.data.workflow_runs.length === 0) {
-              throw new Error('No successful workflow runs found');
-            }
-            
-            const latestRun = workflowRuns.data.workflow_runs[0];
-            console.log('Latest successful run ID:', latestRun.id);
-            
-            return latestRun.id;
-            
-      - name: download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: nextjs-build
-          path: ./
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.event.workflow_run.repository.full_name }}
-          run-id: ${{ steps.get-workflow-run.outputs.result }}
       - name: set-up node
         uses: actions/setup-node@v4
         with:
