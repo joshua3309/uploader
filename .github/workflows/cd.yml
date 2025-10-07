@@ -1,12 +1,12 @@
 ---
-name: cd deployment
+name: cd deployment 
+
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
