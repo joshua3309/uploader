@@ -8,6 +8,7 @@ on:
 
 permissions:
   actions: read  # Required for artifact download
+  contents: read # Required for downloading artifacts
 
 jobs:
   deploy:
@@ -18,11 +19,20 @@ jobs:
       - name: checkout code
         uses: actions/checkout@v4
         # Note: Keeping for future AWS CLI operations
+      - name: Debug workflow run info
+        run: |
+          echo "Workflow run ID: ${{ github.event.workflow_run.id }}"
+          echo "Repository: ${{ github.event.workflow_run.repository.full_name }}"
+          echo "Workflow name: ${{ github.event.workflow_run.name }}"
+          echo "Conclusion: ${{ github.event.workflow_run.conclusion }}"
+          
       - name: download artifact
         uses: actions/download-artifact@v4
         with:
           name: nextjs-build
           path: ./
+          repository: ${{ github.event.workflow_run.repository.full_name }}
+          run-id: ${{ github.event.workflow_run.id }}
       - name: set-up node
         uses: actions/setup-node@v4
         with:
