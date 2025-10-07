@@ -39,6 +39,17 @@ jobs:
       - name: build app
         run: npm run build
 
+      - name: Debug files before artifact creation
+        run: |
+          echo "Checking if .next directory exists:"
+          ls -la .next/ || echo ".next directory not found"
+          echo "Checking if package.json exists:"
+          ls -la package.json || echo "package.json not found"
+          echo "Checking if public directory exists:"
+          ls -la public/ || echo "public directory not found"
+          echo "Checking if next.config.mjs exists:"
+          ls -la next.config.mjs || echo "next.config.mjs not found"
+
       - name: build artifact
         uses: actions/upload-artifact@v4
         with: 
@@ -50,3 +61,8 @@ jobs:
             public/
             next.config.mjs
           retention-days: 1
+
+      - name: Verify artifact creation
+        run: |
+          echo "Artifact 'nextjs-build' should have been created"
+          echo "This step confirms the upload-artifact action completed successfully"

@@ -9,6 +9,7 @@ on:
 permissions:
   actions: read  # Required for artifact download
   contents: read # Required for downloading artifacts
+  github-token: read # Required for github-script action
 
 jobs:
   deploy:
@@ -25,6 +26,18 @@ jobs:
           echo "Repository: ${{ github.event.workflow_run.repository.full_name }}"
           echo "Workflow name: ${{ github.event.workflow_run.name }}"
           echo "Conclusion: ${{ github.event.workflow_run.conclusion }}"
+          echo "Head SHA: ${{ github.event.workflow_run.head_sha }}"
+          
+      - name: List available artifacts
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: '${{ github.event.workflow_run.id }}'
+            });
+            console.log('Available artifacts:', artifacts.data.artifacts);
           
       - name: download artifact
         uses: actions/download-artifact@v4
