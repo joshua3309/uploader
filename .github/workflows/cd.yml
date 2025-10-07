@@ -3,7 +3,7 @@ name: cd deployment
 
 on:
   workflow_run:
-    workflows: ["CI Pipeline"]
+    workflows: ["ci pipeline"]
     types:
       - completed
 
