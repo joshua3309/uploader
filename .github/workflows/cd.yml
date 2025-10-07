@@ -1,0 +1,55 @@
+---
+name: cd deployment
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+      - name: download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-build
+          path: ./build
+      - name: set-up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: install aws cli
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y awscli
+      - name: configure aws credential
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: deploy to ec2
+        run: >
+          rsync -avz --delete \
+            -e "ssh -o StrickHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }}" \
+            ./build/ \
+            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}:/home/${{ secrets.AWS_EC2_USER }}/uploader/
+
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} \
+            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} << "EOF"
+
+            cd /home/${{ secrets.AWS_EC2_USER }}/uploader
+            npm ci --production
+
+            pm2 restart uploader || pm2 start npm --name "uploader" -- start
+      - name: Notify deployment success
+        if: success()
+        run: |
+          curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{"text":"Deployment to EC2 successful"}' \
+          ${{ secrets.SLACK_WEBHOOK_URL }}
