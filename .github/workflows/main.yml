@@ -52,6 +52,7 @@ jobs:
 
       - name: build artifact
         uses: actions/upload-artifact@v4
+        id: upload-artifact
         with: 
           name: nextjs-build
           path: |
@@ -65,4 +66,6 @@ jobs:
       - name: Verify artifact creation
         run: |
           echo "Artifact 'nextjs-build' should have been created"
+          echo "Artifact ID: ${{ steps.upload-artifact.outputs.artifact-id }}"
+          echo "Artifact URL: ${{ steps.upload-artifact.outputs.artifact-url }}"
           echo "This step confirms the upload-artifact action completed successfully"
