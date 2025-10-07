@@ -9,7 +9,6 @@ on:
 permissions:
   actions: read  # Required for artifact download
   contents: read # Required for downloading artifacts
-  github-token: read # Required for github-script action
 
 jobs:
   deploy:
