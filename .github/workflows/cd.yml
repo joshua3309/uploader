@@ -17,39 +17,50 @@ jobs:
     steps:
       - name: checkout code
         uses: actions/checkout@v4
+        # Note: Keeping for future AWS CLI operations
       - name: download artifact
         uses: actions/download-artifact@v4
         with:
           name: nextjs-build
-          path: ./build
+          path: ./
       - name: set-up node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+        # Note: Keeping for future Node.js operations
       - name: install aws cli
         run: |
           sudo apt-get update
           sudo apt-get install -y awscli
+        # Note: Keeping for future AWS CLI operations
       - name: configure aws credential
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
+        # Note: Keeping for future AWS services integration
       - name: deploy to ec2
-        run: >
+        run: |
+          # Create remote directory if it doesn't exist
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} \
+            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} \
+            "mkdir -p /home/${{ secrets.AWS_EC2_USER }}/uploader"
+          
+          # Sync files to EC2
           rsync -avz --delete \
-            -e "ssh -o StrickHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }}" \
-            ./build/ \
+            -e "ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }}" \
+            ./ \
             ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}:/home/${{ secrets.AWS_EC2_USER }}/uploader/
 
+          # Install dependencies and restart application
           ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} \
             ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} << "EOF"
-
+            
             cd /home/${{ secrets.AWS_EC2_USER }}/uploader
             npm ci --production
-
             pm2 restart uploader || pm2 start npm --name "uploader" -- start
+          EOF
       - name: Notify deployment success
         if: success()
         run: |
