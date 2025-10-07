@@ -1,0 +1,95 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: setup-node js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: install dependencies
+        run: npm ci 
+
+      - name: run lint
+        run: npm run lint
+
+      - name: Cache Next.js build
+        uses: actions/cache@v3
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
+
+      - name: build app
+        run: npm run build
+
+      - name: Debug files before deployment
+        run: |
+          echo "Checking if .next directory exists:"
+          ls -la .next/ || echo ".next directory not found"
+          echo "Checking if package.json exists:"
+          ls -la package.json || echo "package.json not found"
+          echo "Checking if public directory exists:"
+          ls -la public/ || echo "public directory not found"
+          echo "Checking if next.config.mjs exists:"
+          ls -la next.config.mjs || echo "next.config.mjs not found"
+
+      - name: set-up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: install aws cli
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y awscli
+
+      - name: configure aws credential
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: deploy to ec2
+        run: |
+          # Create remote directory if it doesn't exist
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} \
+            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} \
+            "mkdir -p /home/${{ secrets.AWS_EC2_USER }}/uploader"
+          
+          # Sync files to EC2
+          rsync -avz --delete \
+            -e "ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }}" \
+            ./ \
+            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}:/home/${{ secrets.AWS_EC2_USER }}/uploader/
+
+          # Install dependencies and restart application
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} \
+            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} << "EOF"
+            
+            cd /home/${{ secrets.AWS_EC2_USER }}/uploader
+            npm ci --production
+            pm2 restart uploader || pm2 start npm --name "uploader" -- start
+          EOF
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{"text":"Deployment to EC2 successful"}' \
+          ${{ secrets.SLACK_WEBHOOK_URL }}
