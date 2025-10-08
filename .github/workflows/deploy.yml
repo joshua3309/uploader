@@ -57,58 +57,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Check EC2 instance and security groups
-        run: |
-          echo "Checking EC2 instance status and security groups..."
-          
-          # Get instance ID from IP address
-          INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=ip-address,Values=${{ secrets.AWS_EC2_HOST }}" \
-            --query 'Reservations[*].Instances[*].InstanceId' \
-            --output text)
-          
-          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
-            echo "Could not find instance with IP ${{ secrets.AWS_EC2_HOST }}"
-            echo "Listing all running instances:"
-            aws ec2 describe-instances \
-              --filters "Name=instance-state-name,Values=running" \
-              --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress,PrivateIpAddress]' \
-              --output table
-            exit 1
-          fi
-          
-          echo "Found instance: $INSTANCE_ID"
-          
-          # Check instance status
-          aws ec2 describe-instances \
-            --instance-ids $INSTANCE_ID \
-            --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress,PrivateIpAddress]' \
-            --output table
-          
-          # Check security groups
-          echo "Checking security groups for SSM connectivity..."
-          aws ec2 describe-instances \
-            --instance-ids $INSTANCE_ID \
-            --query 'Reservations[*].Instances[*].SecurityGroups[*].[GroupId,GroupName]' \
-            --output table
-          
-          # Get security group IDs
-          SG_IDS=$(aws ec2 describe-instances \
-            --instance-ids $INSTANCE_ID \
-            --query 'Reservations[*].Instances[*].SecurityGroups[*].GroupId' \
-            --output text)
-          
-          echo "Security group IDs: $SG_IDS"
-          
-          # Check outbound rules for HTTPS (required for SSM)
-          for sg_id in $SG_IDS; do
-            echo "Checking outbound rules for security group: $sg_id"
-            aws ec2 describe-security-groups \
-              --group-ids $sg_id \
-              --query 'SecurityGroups[*].IpPermissionsEgress[*].[IpProtocol,FromPort,ToPort,IpRanges[*].CidrIp]' \
-              --output table
-          done
-
       - name: Setup SSH key and configuration
         run: |
           # Create SSH key file
@@ -130,70 +78,9 @@ jobs:
             TCPKeepAlive yes
           EOF
           
-          # Test SSH connection with detailed error reporting
+          # Test SSH connection
           echo "Testing SSH connection..."
-          if ssh -o ConnectTimeout=10 -o ConnectionAttempts=3 -o LogLevel=DEBUG2 ec2-deploy "echo 'SSH connection successful'" 2>&1; then
-            echo "✓ SSH connection successful"
-          else
-            echo "✗ SSH connection failed. Troubleshooting..."
-            echo "Checking if instance is running..."
-            aws ec2 describe-instances --instance-ids $(aws ec2 describe-instances --filters "Name=ip-address,Values=${{ secrets.AWS_EC2_HOST }}" --query 'Reservations[*].Instances[*].InstanceId' --output text) --query 'Reservations[*].Instances[*].[State.Name,PublicIpAddress,PrivateIpAddress]' --output table
-            echo "SSH connection troubleshooting complete. Check AWS Console for instance status."
-            exit 1
-          fi
-
-      - name: Fix SSM Agent connectivity
-        run: |
-          echo "Diagnosing and fixing SSM Agent issues..."
-          
-          # Check SSM Agent status and restart if needed
-          ssh ec2-deploy "
-            echo '=== SSM Agent Status Check ==='
-            
-            # Check if SSM agent is installed and running
-            if systemctl is-active --quiet amazon-ssm-agent; then
-              echo 'SSM Agent is running'
-              systemctl status amazon-ssm-agent --no-pager -l
-            else
-              echo 'SSM Agent is not running, attempting to start...'
-              sudo systemctl start amazon-ssm-agent
-              sleep 5
-              systemctl status amazon-ssm-agent --no-pager -l
-            fi
-            
-            # Check network connectivity to SSM endpoints
-            echo '=== Network Connectivity Check ==='
-            echo 'Testing connectivity to SSM endpoints...'
-            
-            # Get region from metadata service
-            REGION=\$(curl -s http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null || echo 'us-east-1')
-            echo \"Detected region: \$REGION\"
-            
-            # Test connectivity to SSM endpoints
-            for endpoint in \"ssm.\$REGION.amazonaws.com\" \"ssmmessages.\$REGION.amazonaws.com\" \"ec2messages.\$REGION.amazonaws.com\"; do
-              echo \"Testing connectivity to \$endpoint...\"
-              if timeout 10 nc -z \$endpoint 443; then
-                echo \"✓ \$endpoint is reachable\"
-              else
-                echo \"✗ \$endpoint is not reachable\"
-              fi
-            done
-            
-            # Restart SSM agent if it was down
-            echo '=== Restarting SSM Agent ==='
-            sudo systemctl restart amazon-ssm-agent
-            sleep 10
-            
-            # Check status after restart
-            echo '=== Final SSM Agent Status ==='
-            systemctl status amazon-ssm-agent --no-pager -l
-            
-            # Check if agent is registered
-            echo '=== Checking SSM Agent Registration ==='
-            sudo /snap/amazon-ssm-agent/current/amazon-ssm-agent status 2>/dev/null || echo 'SSM Agent status check failed'
-            
-            echo '=== SSM Agent Fix Complete ==='
-          "
+          ssh -o ConnectTimeout=10 -o ConnectionAttempts=3 ec2-deploy "echo 'SSH connection successful'"
 
       - name: Deploy to EC2
         run: |
@@ -298,14 +185,6 @@ jobs:
             echo 'Application deployment completed successfully'
           "
 
-      - name: Verify SSM Agent after deployment
-        run: |
-          echo "Verifying SSM Agent status after deployment..."
-          ssh ec2-deploy "
-            echo '=== Post-Deployment SSM Agent Check ==='
-            systemctl status amazon-ssm-agent --no-pager -l
-            echo 'SSM Agent verification complete'
-          "
 
       - name: Notify deployment success
         if: success()
