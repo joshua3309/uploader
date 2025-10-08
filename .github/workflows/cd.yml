@@ -12,13 +12,26 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: checkout code
-        uses: actions/checkout@v4
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-build
+          path: ./
+
+      - name: Verify artifacts
+        run: |
+          echo "Verifying downloaded artifacts..."
+          ls -la .next/ || echo ".next directory not found"
+          ls -la package.json || echo "package.json not found"
+          ls -la public/ || echo "public directory not found"
+          ls -la next.config.mjs || echo "next.config.mjs not found"
+          echo "Artifacts verification complete"
+
       - name: set-up node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-        # Note: Keeping for future Node.js operations
+          cache: "npm"
       
       - name: configure aws credential
         uses: aws-actions/configure-aws-credentials@v4
@@ -26,7 +39,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-        # Note: Keeping for future AWS services integration
         
       - name: Setup SSH key and configuration
         run: |
@@ -57,17 +69,20 @@ jobs:
           ssh -o ConnectTimeout=10 -o ConnectionAttempts=3 ec2-deploy "echo 'SSH connection successful'"
       - name: Deploy to EC2
         run: |
-          # Sync files
+          # Sync built application files
           rsync -az --delete \
             -e "ssh -o ConnectTimeout=30" \
             --exclude='node_modules' --exclude='.git' --exclude='.next/cache' \
             ./ ec2-deploy:/home/${{ secrets.AWS_EC2_USER }}/uploader/
-          # Deploy and restart
+
+          # Deploy and restart with built application
           ssh ec2-deploy "
             cd /home/${{ secrets.AWS_EC2_USER }}/uploader
+            echo 'Deploying pre-built Next.js application...'
             rm -rf node_modules package-lock.json
             npm cache clean --force
             timeout 300 npm install --omit=dev --no-audit --no-fund
+            echo 'Built application ready - starting with PM2...'
             pm2 restart uploader || pm2 start npm --name 'uploader' -- start
           "
       - name: Notify deployment success
