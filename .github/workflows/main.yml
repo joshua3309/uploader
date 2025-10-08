@@ -39,16 +39,20 @@ jobs:
       - name: build app
         run: npm run build
 
-      - name: Debug files before artifact creation
+      - name: Debug files after build
         run: |
+          echo "=== Build Results ==="
           echo "Checking if .next directory exists:"
           ls -la .next/ || echo ".next directory not found"
+          echo "Checking .next contents:"
+          ls -la .next/ 2>/dev/null || echo "Cannot list .next contents"
           echo "Checking if package.json exists:"
           ls -la package.json || echo "package.json not found"
           echo "Checking if public directory exists:"
           ls -la public/ || echo "public directory not found"
           echo "Checking if next.config.mjs exists:"
           ls -la next.config.mjs || echo "next.config.mjs not found"
+          echo "Build verification complete"
 
       - name: build artifact
         uses: actions/upload-artifact@v4

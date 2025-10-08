@@ -23,13 +23,20 @@ jobs:
           name: nextjs-build
           path: ./
 
-      - name: Verify deployment files
+      - name: Verify downloaded artifacts
         run: |
-          echo "Checking deployment files..."
+          echo "=== Downloaded Artifacts ==="
+          echo "Checking if .next directory exists:"
           ls -la .next/ || echo ".next directory not found"
+          echo "Checking .next contents:"
+          ls -la .next/ 2>/dev/null || echo "Cannot list .next contents"
+          echo "Checking if package.json exists:"
           ls -la package.json || echo "package.json not found"
+          echo "Checking if src directory exists:"
           ls -la src/ || echo "src directory not found"
-          echo "File verification complete"
+          echo "Checking if public directory exists:"
+          ls -la public/ || echo "public directory not found"
+          echo "Artifact verification complete"
 
       - name: set-up node
         uses: actions/setup-node@v4
@@ -79,11 +86,11 @@ jobs:
             --exclude='node_modules' --exclude='.git' --exclude='.next/cache' \
             ./ ec2-deploy:/home/${{ secrets.AWS_EC2_USER }}/uploader/
 
-          # Deploy and restart with built application
+          # Deploy and restart with downloaded artifacts
           ssh ec2-deploy "
             cd /home/${{ secrets.AWS_EC2_USER }}/uploader
-            echo 'Deploying pre-built Next.js application...'
-            echo 'Checking files before deployment:'
+            echo 'Deploying downloaded Next.js artifacts...'
+            echo 'Checking files after sync:'
             ls -la .next/ || echo '.next directory not found'
             ls -la package.json || echo 'package.json not found'
             ls -la src/ || echo 'src directory not found'
