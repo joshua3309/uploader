@@ -65,7 +65,7 @@ jobs:
       - name: Deploy to ec2
         run: |
           # Create remote directory if it doesn't exist
-          ssh -o StrictHostKeyChecking=no -i /tmp/ec2-ssh-key.pem \
+          ssh -o StrictHostKeyChecking=no  -i /tmp/ec2-ssh-key.pem \
             ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} \
             "mkdir -p /home/${{ secrets.AWS_EC2_USER }}/uploader"
           
@@ -76,7 +76,7 @@ jobs:
             ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}:/home/${{ secrets.AWS_EC2_USER }}/uploader/
 
           # Install dependencies and restart application
-          ssh -tt -o StrictHostKeyChecking=no -i /tmp/ec2-ssh-key.pem \
+          ssh -tt -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o ConnectionAttempts=3 -i /tmp/ec2-ssh-key.pem \
             ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} "
               cd /home/${{ secrets.AWS_EC2_USER }}/uploader &&
               npm ci --omit=dev --no-audit --no-fund --silent &&
