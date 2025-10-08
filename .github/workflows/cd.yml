@@ -32,10 +32,10 @@ jobs:
           ls -la .next/ 2>/dev/null || echo "Cannot list .next contents"
           echo "Checking if package.json exists:"
           ls -la package.json || echo "package.json not found"
-          echo "Checking if src directory exists:"
-          ls -la src/ || echo "src directory not found"
           echo "Checking if public directory exists:"
           ls -la public/ || echo "public directory not found"
+          echo "Checking if next.config.mjs exists:"
+          ls -la next.config.mjs || echo "next.config.mjs not found"
           echo "Artifact verification complete"
 
       - name: set-up node
@@ -93,7 +93,7 @@ jobs:
             echo 'Checking files after sync:'
             ls -la .next/ || echo '.next directory not found'
             ls -la package.json || echo 'package.json not found'
-            ls -la src/ || echo 'src directory not found'
+            ls -la public/ || echo 'public directory not found'
             
             rm -rf node_modules package-lock.json
             npm cache clean --force
@@ -103,13 +103,49 @@ jobs:
             ls -la .next/ || echo '.next directory not found after install'
             ls -la package.json || echo 'package.json not found after install'
             
+            echo 'Checking environment variables:'
+            echo 'AWS_REGION:' \$AWS_REGION
+            echo 'AWS_S3_BUCKET:' \$AWS_S3_BUCKET
+            echo 'DEST_BUCKET:' \$DEST_BUCKET
+            echo 'NODE_ENV:' \$NODE_ENV
+            
             echo 'Built application ready - starting with PM2...'
-            pm2 restart uploader || pm2 start npm --name 'uploader' -- start
+            
+            # Kill any existing PM2 processes
+            pm2 delete uploader 2>/dev/null || echo 'No existing PM2 process found'
+            
+            # Set NODE_ENV to production
+            export NODE_ENV=production
+            
+            # Start the application with PM2
+            pm2 start npm --name 'uploader' -- start
+            
+            # Wait a moment for PM2 to start
+            sleep 3
             
             echo 'Checking PM2 status:'
             pm2 status
+            
+            echo 'Checking PM2 logs:'
+            pm2 logs uploader --lines 20
+            
+            # If PM2 failed, try alternative method
+            if ! pm2 list | grep -q 'uploader.*online'; then
+              echo 'PM2 start failed, trying alternative method...'
+              pm2 delete uploader 2>/dev/null
+              pm2 start 'next start' --name 'uploader' --cwd /home/${{ secrets.AWS_EC2_USER }}/uploader
+              sleep 3
+              pm2 status
+            fi
+            
             echo 'Checking if app is running on port 3000:'
             netstat -tlnp | grep :3000 || echo 'Port 3000 not listening'
+            
+            echo 'Checking process list:'
+            ps aux | grep node || echo 'No node processes found'
+            
+            echo 'Testing application health:'
+            curl -I http://localhost:3000 || echo 'Application not responding on localhost:3000'
           "
       - name: Notify deployment success
         if: success()
