@@ -13,19 +13,13 @@ jobs:
 
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v3
         with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: ci pipeline
+          workflow_conclusion: success
           name: nextjs-build
           path: ./
-
-      - name: Verify artifacts
-        run: |
-          echo "Verifying downloaded artifacts..."
-          ls -la .next/ || echo ".next directory not found"
-          ls -la package.json || echo "package.json not found"
-          ls -la public/ || echo "public directory not found"
-          ls -la next.config.mjs || echo "next.config.mjs not found"
-          echo "Artifacts verification complete"
 
       - name: set-up node
         uses: actions/setup-node@v4
