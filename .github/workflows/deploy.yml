@@ -81,8 +81,7 @@ jobs:
               cd /home/${{ secrets.AWS_EC2_USER }}/uploader &&
               npm ci --omit=dev --no-audit --no-fund --silent &&
               pm2 restart uploader || pm2 start npm --name 'uploader' -- start
-  "
-
+            "
 
       - name: Notify deployment success
         if: success()
