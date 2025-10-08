@@ -57,21 +57,26 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Create SSH key file
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > /tmp/ec2-ssh-key.pem
+          chmod 600 /tmp/ec2-ssh-key.pem
+
       - name: deploy to ec2
         run: |
           # Create remote directory if it doesn't exist
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} \
+          ssh -o StrictHostKeyChecking=no -i /tmp/ec2-ssh-key.pem \
             ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} \
             "mkdir -p /home/${{ secrets.AWS_EC2_USER }}/uploader"
           
           # Sync files to EC2
           rsync -avz --delete \
-            -e "ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }}" \
+            -e "ssh -o StrictHostKeyChecking=no -i /tmp/ec2-ssh-key.pem" \
             ./ \
             ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}:/home/${{ secrets.AWS_EC2_USER }}/uploader/
 
           # Install dependencies and restart application
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} \
+          ssh -o StrictHostKeyChecking=no -i /tmp/ec2-ssh-key.pem \
             ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} << "EOF"
             
             cd /home/${{ secrets.AWS_EC2_USER }}/uploader
