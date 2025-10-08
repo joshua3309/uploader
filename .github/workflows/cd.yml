@@ -132,31 +132,24 @@ jobs:
             pm2 start npm --name 'uploader' -- start
             
             # Wait a moment for PM2 to start
-            sleep 3
+            sleep 5
             
             echo 'Checking PM2 status:'
             pm2 status
             
             echo 'Checking PM2 logs:'
-            pm2 logs uploader --lines 20
+            pm2 logs uploader --lines 10
             
-            # If PM2 failed, try alternative method
-            if ! pm2 list | grep -q 'uploader.*online'; then
-              echo 'PM2 start failed, trying alternative method...'
-              pm2 delete uploader 2>/dev/null
-              pm2 start 'next start' --name 'uploader' --cwd /home/${{ secrets.AWS_EC2_USER }}/uploader
-              sleep 3
-              pm2 status
-            fi
+            # Save PM2 configuration
+            pm2 save
             
             echo 'Checking if app is running on port 3000:'
             netstat -tlnp | grep :3000 || echo 'Port 3000 not listening'
             
-            echo 'Checking process list:'
-            ps aux | grep node || echo 'No node processes found'
-            
             echo 'Testing application health:'
             curl -I http://localhost:3000 || echo 'Application not responding on localhost:3000'
+            
+            echo 'Deployment completed successfully!'
           "
       - name: Notify deployment success
         if: success()
