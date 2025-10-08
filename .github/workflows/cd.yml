@@ -12,6 +12,9 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
       - name: Download build artifacts
         uses: dawidd6/action-download-artifact@v3
         with:
@@ -19,6 +22,14 @@ jobs:
           run_id: ${{ github.event.workflow_run.id }}
           name: nextjs-build
           path: ./
+
+      - name: Verify deployment files
+        run: |
+          echo "Checking deployment files..."
+          ls -la .next/ || echo ".next directory not found"
+          ls -la package.json || echo "package.json not found"
+          ls -la src/ || echo "src directory not found"
+          echo "File verification complete"
 
       - name: set-up node
         uses: actions/setup-node@v4
@@ -72,11 +83,26 @@ jobs:
           ssh ec2-deploy "
             cd /home/${{ secrets.AWS_EC2_USER }}/uploader
             echo 'Deploying pre-built Next.js application...'
+            echo 'Checking files before deployment:'
+            ls -la .next/ || echo '.next directory not found'
+            ls -la package.json || echo 'package.json not found'
+            ls -la src/ || echo 'src directory not found'
+            
             rm -rf node_modules package-lock.json
             npm cache clean --force
             timeout 300 npm install --omit=dev --no-audit --no-fund
+            
+            echo 'Checking files after npm install:'
+            ls -la .next/ || echo '.next directory not found after install'
+            ls -la package.json || echo 'package.json not found after install'
+            
             echo 'Built application ready - starting with PM2...'
             pm2 restart uploader || pm2 start npm --name 'uploader' -- start
+            
+            echo 'Checking PM2 status:'
+            pm2 status
+            echo 'Checking if app is running on port 3000:'
+            netstat -tlnp | grep :3000 || echo 'Port 3000 not listening'
           "
       - name: Notify deployment success
         if: success()
