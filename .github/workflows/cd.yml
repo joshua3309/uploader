@@ -19,11 +19,7 @@ jobs:
         with:
           node-version: "20"
         # Note: Keeping for future Node.js operations
-      - name: install aws cli
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y awscli
-        # Note: Keeping for future AWS CLI operations
+      
       - name: configure aws credential
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -31,27 +27,49 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
         # Note: Keeping for future AWS services integration
-      - name: deploy to ec2
+        
+      - name: Setup SSH key and configuration
         run: |
-          # Create remote directory if it doesn't exist
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} \
-            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} \
-            "mkdir -p /home/${{ secrets.AWS_EC2_USER }}/uploader"
+          # Create SSH key file
+          echo "${{ secrets.EC2_SSH_KEY }}" > /tmp/ec2-ssh-key.pem
+          chmod 600 /tmp/ec2-ssh-key.pem
           
-          # Sync files to EC2
-          rsync -avz --delete \
-            -e "ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }}" \
-            ./ \
-            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}:/home/${{ secrets.AWS_EC2_USER }}/uploader/
-
-          # Install dependencies and restart application
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} \
-            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} << "EOF"
-            
-            cd /home/${{ secrets.AWS_EC2_USER }}/uploader
-            npm ci --production
-            pm2 restart uploader || pm2 start npm --name "uploader" -- start
+          # Create SSH config for better connection management
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host ec2-deploy
+            HostName ${{ secrets.AWS_EC2_HOST }}
+            User ${{ secrets.AWS_EC2_USER }}
+            IdentityFile /tmp/ec2-ssh-key.pem
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ConnectTimeout 30
+            ServerAliveInterval 30
+            ServerAliveCountMax 6
+            TCPKeepAlive yes
+            ControlMaster auto
+            ControlPath /tmp/ssh-%r@%h:%p
+            ControlPersist 10m
           EOF
+          
+          # Test SSH connection
+          echo "Testing SSH connection..."
+          ssh -o ConnectTimeout=10 -o ConnectionAttempts=3 ec2-deploy "echo 'SSH connection successful'"
+      - name: Deploy to EC2
+        run: |
+          # Sync files
+          rsync -az --delete \
+            -e "ssh -o ConnectTimeout=30" \
+            --exclude='node_modules' --exclude='.git' --exclude='.next/cache' \
+            ./ ec2-deploy:/home/${{ secrets.AWS_EC2_USER }}/uploader/
+          # Deploy and restart
+          ssh ec2-deploy "
+            cd /home/${{ secrets.AWS_EC2_USER }}/uploader
+            rm -rf node_modules package-lock.json
+            npm cache clean --force
+            timeout 300 npm install --omit=dev --no-audit --no-fund
+            pm2 restart uploader || pm2 start npm --name 'uploader' -- start
+          "
       - name: Notify deployment success
         if: success()
         run: |
