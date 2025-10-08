@@ -87,7 +87,7 @@ jobs:
             ./ ec2-deploy:/home/${{ secrets.AWS_EC2_USER }}/uploader/
 
           # Deploy and restart with downloaded artifacts
-          ssh ec2-deploy "
+          timeout 300 ssh ec2-deploy "
             cd /home/${{ secrets.AWS_EC2_USER }}/uploader
             echo 'Deploying downloaded Next.js artifacts...'
             echo 'Checking files after sync:'
@@ -136,9 +136,6 @@ jobs:
             
             echo 'Checking PM2 status:'
             pm2 status
-            
-            echo 'Checking PM2 logs:'
-            pm2 logs uploader --lines 10
             
             # Save PM2 configuration
             pm2 save
