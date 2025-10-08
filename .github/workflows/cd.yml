@@ -95,13 +95,24 @@ jobs:
             ls -la package.json || echo 'package.json not found'
             ls -la public/ || echo 'public directory not found'
             
-            rm -rf node_modules package-lock.json
-            npm cache clean --force
-            timeout 300 npm install --omit=dev --no-audit --no-fund
-            
-            echo 'Checking files after npm install:'
-            ls -la .next/ || echo '.next directory not found after install'
-            ls -la package.json || echo 'package.json not found after install'
+            # Check if .next directory is complete
+            if [ ! -f .next/BUILD_ID ] || [ ! -d .next/server ] || [ ! -d .next/static ]; then
+              echo 'ERROR: .next directory is incomplete or corrupted!'
+              echo 'Contents of .next directory:'
+              ls -la .next/
+              echo 'Rebuilding application locally...'
+              rm -rf node_modules package-lock.json
+              npm cache clean --force
+              timeout 300 npm install --omit=dev --no-audit --no-fund
+              timeout 300 npm run build
+              echo 'Build completed. Checking .next contents:'
+              ls -la .next/
+            else
+              echo '.next directory appears complete'
+              rm -rf node_modules package-lock.json
+              npm cache clean --force
+              timeout 300 npm install --omit=dev --no-audit --no-fund
+            fi
             
             echo 'Checking environment variables:'
             echo 'AWS_REGION:' \$AWS_REGION
