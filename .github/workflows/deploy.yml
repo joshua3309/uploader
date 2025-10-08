@@ -57,31 +57,63 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Create SSH key file
+      - name: Setup SSH key and configuration
         run: |
+          # Create SSH key file
           echo "${{ secrets.EC2_SSH_KEY }}" > /tmp/ec2-ssh-key.pem
           chmod 600 /tmp/ec2-ssh-key.pem
-
-      - name: Deploy to ec2
-        run: |
-          # Create remote directory if it doesn't exist
-          ssh -o StrictHostKeyChecking=no  -i /tmp/ec2-ssh-key.pem \
-            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} \
-            "mkdir -p /home/${{ secrets.AWS_EC2_USER }}/uploader"
           
-          # Sync files to EC2
-          rsync -az --delete \
-            -e "ssh -o StrictHostKeyChecking=no -i /tmp/ec2-ssh-key.pem" \
+          # Create SSH config for better connection management
+          mkdir -p ~/.ssh
+          cat > ~/.ssh/config << EOF
+          Host ec2-deploy
+            HostName ${{ secrets.AWS_EC2_HOST }}
+            User ${{ secrets.AWS_EC2_USER }}
+            IdentityFile /tmp/ec2-ssh-key.pem
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ConnectTimeout 30
+            ServerAliveInterval 60
+            ServerAliveCountMax 3
+            TCPKeepAlive yes
+          EOF
+          
+          # Test SSH connection
+          echo "Testing SSH connection..."
+          ssh -o ConnectTimeout=10 -o ConnectionAttempts=3 ec2-deploy "echo 'SSH connection successful'"
+
+      - name: Deploy to EC2
+        run: |
+          set -e  # Exit on any error
+          
+          echo "Starting deployment to EC2..."
+          
+          # Create remote directory if it doesn't exist
+          echo "Creating remote directory..."
+          ssh ec2-deploy "mkdir -p /home/${{ secrets.AWS_EC2_USER }}/uploader"
+          
+          # Sync files to EC2 with better error handling
+          echo "Syncing files to EC2..."
+          rsync -az --delete --progress \
+            -e "ssh -o ConnectTimeout=30 -o ConnectionAttempts=3" \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='.next/cache' \
             ./ \
-            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}:/home/${{ secrets.AWS_EC2_USER }}/uploader/
+            ec2-deploy:/home/${{ secrets.AWS_EC2_USER }}/uploader/
 
           # Install dependencies and restart application
-          ssh -tt -o StrictHostKeyChecking=no -o ConnectTimeout=15 -o ConnectionAttempts=3 -i /tmp/ec2-ssh-key.pem \
-            ${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }} "
-              cd /home/${{ secrets.AWS_EC2_USER }}/uploader &&
-              npm ci --omit=dev --no-audit --no-fund --silent &&
-              pm2 restart uploader || pm2 start npm --name 'uploader' -- start
-            "
+          echo "Installing dependencies and restarting application..."
+          ssh -tt ec2-deploy "
+            set -e
+            cd /home/${{ secrets.AWS_EC2_USER }}/uploader
+            echo 'Current directory:' \$(pwd)
+            echo 'Installing dependencies...'
+            npm ci --omit=dev --no-audit --no-fund --silent
+            echo 'Restarting application with PM2...'
+            pm2 restart uploader || pm2 start npm --name 'uploader' -- start
+            echo 'Application deployment completed successfully'
+          "
 
       - name: Notify deployment success
         if: success()
